@@ -192,7 +192,7 @@ def segmentMotive(waxSegmentedImage):
     
     waxThreshold = cv.threshold( cv.cvtColor(waxSegmentedImage, cv.COLOR_BGR2GRAY), 1, 255, cv.THRESH_BINARY)[1]
     numberOfWaxPixels = np.where(waxThreshold > 0)[0]
-    mask = getMostLikelyMaskFor(contours, tenChooseTwoCache, referenceImage, len(numberOfWaxPixels))
+    mask = getMostLikelyMaskFor(contours, tenChooseTwoCache, referenceImage, len(numberOfWaxPixels), waxSegmentedImage)
     maskContours = cv.findContours(mask, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
     maskContours = imutils.grab_contours(maskContours)
     
@@ -304,13 +304,13 @@ def getSobelOf(image):
     thresh = cv.threshold(gradient,0,255,cv.THRESH_BINARY | cv.THRESH_OTSU)[1]
     return thresh
 
-def getMostLikelyMaskFor(allContours, contoursPairs, referenceImage, numberOfWaxPixels):
+def getMostLikelyMaskFor(allContours, contoursPairs, referenceImage, numberOfWaxPixels, original):
     pairMasks = [getMasksForContourPair(allContours[pair[0]], allContours[pair[1]], referenceImage, numberOfWaxPixels) for pair in contoursPairs]
     pairMasks = list(filter(lambda masks: len(masks) > 0, pairMasks))
     
     scoreSums = getCriteriaWeightedScores(pairMasks, referenceImage, numberOfWaxPixels)
     
-    #drawPairMasksAndScoresOn(pairMasks[:5], scoreSums[:5], original)
+    drawPairMasksAndScoresOn(pairMasks, scoreSums, original)
     
     return getMaskWithHighestScore(scoreSums, pairMasks)
     
@@ -356,6 +356,8 @@ def getCriteriaWeightedScores(pairMasks, referenceImage, numberOfWaxPixels):
     pairSizeDistributions = [getDistributionValuesForPairMasks(masks, numberOfWaxPixels) for masks in pairMasks]
     pairSizeDistributions = normalizeValues(pairSizeDistributions)
     
+    pairSymmetries = [getSymmetryValuesForPairMaks(masks, referenceImage) for masks in pairMasks]
+    
     return [getSingleWeightedScores(pairDensities[i], pairDistances[i], pairAngles[i], pairSizeDistributions[i]) for i, pair in enumerate(pairMasks)]
 
 def getSingleWeightedScores(densityScoresForPair, distanceScoresForPair, angleScoresForPair, distributionScoresForPair): 
@@ -375,6 +377,7 @@ def shouldBeFilteredOut(mask, referenceImage, numberOfWaxPixels):
     if (isEmptyMask(mask)): return True
     if (getRelativeMaskSizeToWaxSize(mask, numberOfWaxPixels) <= 0.15): return True
     if (boundingBoxIsTouchingImageBorder(mask, referenceImage)): return True
+    if(getAngleDifferenceToEvenRotation(mask) >= 25): return True
     return False
     
 def isEmptyMask(mask):
@@ -496,6 +499,90 @@ def normpdf(x, mean, sd):
     denom = (2*math.pi*var)**.5
     num = math.exp(-(float(x)-float(mean))**2/(2*var))
     return num/denom
+
+def getSymmetryValuesForPairMaks(pairMasks, referenceImage):
+    return list(map(lambda mask: getSymmetryValueForMask(mask, referenceImage), pairMasks))
+    
+def getSymmetryValueForMask(shapeMask, referenceImage):
+    # Our approach is to first get the moments of the contour the mask describes.
+    # With the contour's center of gravity and orientation we fit a line through it,
+    # drawing it black to separate the mask into two even shapes in which we can
+    # individually check how many pixels in the reference image are white in them.
+    # Finally, we compare the count and return <todo>
+    maskCopy = imutils.resize(shapeMask.copy(), width=700)
+    referenceCopy = imutils.resize(referenceImage.copy(), width=700)
+    
+    shapeHalvesMask, (startX, startY), (endX, endY) = splitShapeMaskInEvenHalves(maskCopy)
+    
+    shapeHalvesContours = cv.findContours(shapeHalvesMask, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+    shapeHalvesContours = imutils.grab_contours(shapeHalvesContours)
+    ensure(len(shapeHalvesContours) == 2).equals(True)
+    
+    oneHalfMask = np.zeros_like(shapeHalvesMask)
+    cv.drawContours(oneHalfMask, shapeHalvesContours, 0, (255, 255, 255), -1)
+    
+    rows, cols = np.where(oneHalfMask == 255)
+    allSymmetryEqualityTuples = [pointEqualsMirrorPointInReferenceImage(x, y, startX, startY, endX, endY, referenceCopy) for x,y in zip(rows, cols)]
+    mirroredPointEqualsCount = len(np.where(allSymmetryEqualityTuples)[0])
+    print(mirroredPointEqualsCount / len(rows))
+    
+    cv.drawContours(referenceCopy, shapeHalvesContours, -1, (255, 255, 255), 4)
+    cv.imshow("symmetry", referenceCopy)
+    
+    cv.waitKey(0)
+    return mirroredPointEqualsCount / len(rows)
+    
+def pointEqualsMirrorPointInReferenceImage(pointX, pointY, startX, startY, endX, endY, referenceImage):
+    mirroredPointAlongLine = getMirroredPointAlong(pointX, pointY, startX, startY, endX, endY)
+    pointValueInReferenceImage = referenceImage[pointX, pointY]
+    mirroredPointValueInReferenceImage = referenceImage[min(mirroredPointAlongLine[0], referenceImage.shape[0]-1), min(mirroredPointAlongLine[1], referenceImage.shape[1]-1)]
+    return pointValueInReferenceImage == mirroredPointValueInReferenceImage
+    
+def getMirroredPointAlong(pointX, pointY, startX, startY, endX, endY):
+    # Set line to equation Ax + By + C = 0
+    A = endY - startY
+    B = -(endX - startX)
+    C = -A * startX - B * startY
+    
+    M = math.sqrt(A * A + B * B)
+    AN = A / M
+    BN = B / M
+    CN = C / M
+    
+    D = AN * pointX + BN * pointY + CN
+    
+    PMX = pointX - 2 * AN * D
+    PMY = pointY - 2 * BN * D
+    
+    return (int(PMX), int(PMY))
+
+def splitShapeMaskInEvenHalves(shapeMask):
+    maskCopy = shapeMask.copy()
+    shapeContours = cv.findContours(maskCopy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+    shapeContours = imutils.grab_contours(shapeContours)
+    ensure(len(shapeContours) == 1).equals(True)
+    
+    moments = cv.moments(shapeContours[0])
+    
+    center = (int(moments["m10"] / moments["m00"]), int(moments["m01"] / moments["m00"]))
+    #theta = 27
+    theta = 0.5 * np.arctan2(2*moments["mu11"], moments["mu20"] - moments["mu02"])
+    
+    lineLength = max(maskCopy.shape)
+    startX = int(-lineLength * np.cos(theta) + center[0])
+    startY = int(-lineLength * np.sin(theta) + center[1])
+    endX = int(lineLength * np.cos(theta) + center[0])
+    endY = int(lineLength * np.sin(theta) + center[1])
+    
+    #startX = int( center[0])
+    #startY = int(-lineLength * np.sin(theta) + center[1])
+    #endX = int( center[0])
+    #endY = int(lineLength * np.sin(theta) + center[1])
+    
+    cv.line(maskCopy, (startX, startY), (endX, endY), (0, 0, 0), 5)
+    
+    return (maskCopy, (startX, startY), (endX, endY))
+    
 
 '-----------------------------------------------SCORING END-------------------------------------------------------------'
     
