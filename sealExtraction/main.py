@@ -13,8 +13,6 @@ Keys:
   ESC   - exit
 '''
 
-# Python 2/3 compatibility
-from __future__ import print_function
 from glob import glob
 
 import argparse
@@ -22,7 +20,6 @@ import sys
 import os
 
 import cv2 as cv
-import imutils
 
 from sealExtraction import segmentSeal
 
@@ -70,20 +67,6 @@ def getJPGGlob():
 def saveImageAsFile(image, imageName, directoryToSave):
     outputPath = outputDirectory + imageName
     cv.imwrite(outputPath, image)
-
-def findAndDrawContoursOn(thresh, image):
-    contours = cv.findContours(thresh, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
-    contours = imutils.grab_contours(contours)
-    contours = sorted(contours, key=cv.contourArea, reverse=True)
-    print("[INFO] {} unique contours found".format(len(contours)))
-
-    drawGivenContoursOn(contours, image)
-
-def drawGivenContoursOn(contours, image):
-    for (i, c) in enumerate(contours):
-        x,y,_w,_h = cv.boundingRect(c)
-        cv.putText(image, "#{}".format(i + 1), (int(x), int(y)), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        cv.drawContours(image, [c], -1, (0, 255, 0), 6)
 
 
 def main():

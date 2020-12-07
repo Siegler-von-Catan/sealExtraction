@@ -1,6 +1,3 @@
-# Python 2/3 compatibility
-from __future__ import print_function
-
 import math
 import cv2 as cv
 import imutils
@@ -8,8 +5,6 @@ import numpy as np
 from ensure import ensure
 
 from utils import getRelativeMaskSizeToWaxSize, normalizeValues
-
-# SCORING START
 
 def getCriteriaWeightedScores(pairMasks, referenceImage, numberOfWaxPixels):
     pairDensities = [getDensitiesForPairMasks(masks, referenceImage) for masks in pairMasks]
@@ -47,7 +42,8 @@ def getDensityOfMaskedArea(mask, referenceImage):
 
     pixelsInMask = referenceCopy[rows, cols]
     whitePixels = np.where(pixelsInMask == 255)
-    if(len(whitePixels[0]) == 0): return 0
+    if len(whitePixels[0]) == 0:
+        return 0
     return len(rows)/len(whitePixels[0])
 
 
@@ -59,15 +55,12 @@ def getShapeCenterToImageCenterDistance(shapeMask, referenceImage):
     shapeContours = imutils.grab_contours(shapeContours)
     ensure(len(shapeContours) == 1).equals(True)
 
-    # FIXME Is this correct?
-    image = referenceImage
-
     # compute the center of the contour
     shapeMoment = cv.moments(shapeContours[0])
     shapeCenterX = int(shapeMoment["m10"] / shapeMoment["m00"])
     shapeCenterY = int(shapeMoment["m01"] / shapeMoment["m00"])
 
-    imageHeight, imageWidth = image.shape[:2]
+    imageHeight, imageWidth = referenceImage.shape[:2]
     imageCenter = np.array([imageWidth/2, imageHeight/2])
     pairCenter = np.array([shapeCenterX, shapeCenterY])
 
@@ -82,8 +75,10 @@ def getAngleDifferenceToEvenRotation(shapeMask):
     # even rotations are 0, 90, 180, 270, 360. as the difference of 45 to the next one is equal to 135, module 90 here
     shapeAngle = shapeAngle % 90
 
-    if (shapeAngle <= 45): return shapeAngle
-    else: return 90 - shapeAngle
+    if shapeAngle <= 45:
+        return shapeAngle
+    else:
+        return 90 - shapeAngle
 
 def getAngleFromShapeMask(shapeMask):
     shapeContours = cv.findContours(shapeMask, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
@@ -187,7 +182,3 @@ def splitShapeMaskInEvenHalves(shapeMask):
     cv.line(maskCopy, (startX, startY), (endX, endY), (0, 0, 0), 5)
 
     return (maskCopy, (startX, startY), (endX, endY))
-
-
-# SCORING END
-

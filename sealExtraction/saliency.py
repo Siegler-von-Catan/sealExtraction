@@ -1,6 +1,3 @@
-# Python 2/3 compatibility
-from __future__ import print_function
-
 import cv2 as cv
 import imutils
 import numpy as np
