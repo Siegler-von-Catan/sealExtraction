@@ -92,13 +92,7 @@ def getDistributionValuesForPairMasks(pairMasks, numberOfWaxPixels):
     return list(map(lambda mask: getDistributionValueOfRelativeShapeSize(mask, numberOfWaxPixels), pairMasks))
 
 def getDistributionValueOfRelativeShapeSize(shapeMask, numberOfWaxPixels):
-    return normpdf(getRelativeMaskSizeToWaxSize(shapeMask, numberOfWaxPixels), 0.6, 0.15)
-
-def normpdf(x, mean, sd):
-    var = float(sd)**2
-    denom = (2*math.pi*var)**.5
-    num = math.exp(-(float(x)-float(mean))**2/(2*var))
-    return num/denom
+    return stats.norm.pdf(getRelativeMaskSizeToWaxSize(shapeMask, numberOfWaxPixels), loc=0.6, scale=0.15)
 
 def getSymmetryValuesForPairMaks(pairMasks, referenceImage):
     return list(map(lambda mask: getSymmetryValueForMask(mask, referenceImage), pairMasks))
