@@ -4,9 +4,6 @@ import numpy as np
 
 from utils import cropImageToContourAABB
 
-#
-#  SEGMENT WAX START
-
 def segmentWax(image):
     """
     Perform a grabcut (https://docs.opencv.org/3.4/d8/d83/tutorial_py_grabcut.html) with the whole image as the
@@ -30,7 +27,6 @@ def segmentWax(image):
     filterOutSmallObjectAreas(combinedMask)
 
     result = cv.bitwise_and(image,image,mask = combinedMask)
-    #result = cropImageToWaxAABB(result, combinedMask)
 
     return result
 
@@ -63,5 +59,3 @@ def filterOutSmallObjectAreas(thresh):
     contours = sorted(contours, key=cv.contourArea, reverse=True)
     for i in range(1, len(contours)):
         cv.fillPoly(thresh, pts =[contours[i]], color=(0,0,0))
-
-# SEGMENT WAX END

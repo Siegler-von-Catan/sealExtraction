@@ -38,7 +38,6 @@ def cropImageToContourAABB(image, contour):
     # like static saliency have a continous contour instead of split ones as
     # they would touch the image borders
 
-    #So....actually cropping it makes it worse for saliency? OK?
     x,y,w,h = cv.boundingRect(contour)
     borderPixels = 20
     x = max(0, x - borderPixels)

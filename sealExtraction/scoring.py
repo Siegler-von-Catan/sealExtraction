@@ -3,6 +3,7 @@ import cv2 as cv
 import imutils
 import numpy as np
 from ensure import ensure
+from scipy import stats
 
 from utils import getRelativeMaskSizeToWaxSize, normalizeValues
 
@@ -21,15 +22,17 @@ def getCriteriaWeightedScores(pairMasks, referenceImage, numberOfWaxPixels):
     pairSizeDistributions = [getDistributionValuesForPairMasks(masks, numberOfWaxPixels) for masks in pairMasks]
     pairSizeDistributions = normalizeValues(pairSizeDistributions)
 
-    pairSymmetries = [getSymmetryValuesForPairMaks(masks, referenceImage) for masks in pairMasks]
+    pairSymmetries = [getSymmetryValuesForPairMasks(masks, referenceImage) for masks in pairMasks]
+    pairSymmetries = normalizeValues(pairSymmetries)
+    pairSymmetries = list(map(lambda values: list(map(lambda value: 1 - value, values)), pairSymmetries))
 
-    return [getSingleWeightedScores(pairDensities[i], pairDistances[i], pairAngles[i], pairSizeDistributions[i]) for i, pair in enumerate(pairMasks)]
+    return [getSingleWeightedScores(pairDensities[i], pairDistances[i], pairAngles[i], pairSizeDistributions[i], pairSymmetries[i]) for i, pair in enumerate(pairMasks)]
 
-def getSingleWeightedScores(densityScoresForPair, distanceScoresForPair, angleScoresForPair, distributionScoresForPair):
-    return [ getWeightedScore(density, distance, angle, distribution) for density, distance, angle, distribution in zip(densityScoresForPair, distanceScoresForPair, angleScoresForPair, distributionScoresForPair)]
+def getSingleWeightedScores(densityScoresForPair, distanceScoresForPair, angleScoresForPair, distributionScoresForPair, symmetryForPair):
+    return [ getWeightedScore(density, distance, angle, distribution, symmetry) for density, distance, angle, distribution, symmetry in zip(densityScoresForPair, distanceScoresForPair, angleScoresForPair, distributionScoresForPair, symmetryForPair)]
 
-def getWeightedScore(densityScore, distanceScore, angleScore, distributionScore):
-    return densityScore + 3*distanceScore + 2*angleScore + 2.4*distributionScore
+def getWeightedScore(densityScore, distanceScore, angleScore, distributionScore, symmetry):
+    return densityScore + 3*distanceScore + 2*angleScore + 2.5*distributionScore + 2*symmetry
 
 def getDensitiesForPairMasks(pairMasks, referenceImage):
     return list(map(lambda mask: getDensityOfMaskedArea(mask, referenceImage), pairMasks))
@@ -46,7 +49,6 @@ def getDensityOfMaskedArea(mask, referenceImage):
         return 0
     return len(rows)/len(whitePixels[0])
 
-
 def getDistancesForPairMasks(pairMasks, referenceImage):
     return list(map(lambda shapeMask: getShapeCenterToImageCenterDistance(shapeMask, referenceImage), pairMasks))
 
@@ -55,7 +57,6 @@ def getShapeCenterToImageCenterDistance(shapeMask, referenceImage):
     shapeContours = imutils.grab_contours(shapeContours)
     ensure(len(shapeContours) == 1).equals(True)
 
-    # compute the center of the contour
     shapeMoment = cv.moments(shapeContours[0])
     shapeCenterX = int(shapeMoment["m10"] / shapeMoment["m00"])
     shapeCenterY = int(shapeMoment["m01"] / shapeMoment["m00"])
@@ -64,8 +65,7 @@ def getShapeCenterToImageCenterDistance(shapeMask, referenceImage):
     imageCenter = np.array([imageWidth/2, imageHeight/2])
     pairCenter = np.array([shapeCenterX, shapeCenterY])
 
-    distance = np.linalg.norm(imageCenter-pairCenter)
-    return distance
+    return np.linalg.norm(imageCenter-pairCenter)
 
 def getAngleDifferencesForPairMasks(pairMasks):
     return list(map(lambda mask: getAngleDifferenceToEvenRotation(mask), pairMasks))
@@ -92,19 +92,26 @@ def getDistributionValuesForPairMasks(pairMasks, numberOfWaxPixels):
     return list(map(lambda mask: getDistributionValueOfRelativeShapeSize(mask, numberOfWaxPixels), pairMasks))
 
 def getDistributionValueOfRelativeShapeSize(shapeMask, numberOfWaxPixels):
-    return stats.norm.pdf(getRelativeMaskSizeToWaxSize(shapeMask, numberOfWaxPixels), loc=0.6, scale=0.15)
+    return stats.norm.pdf(getRelativeMaskSizeToWaxSize(shapeMask, numberOfWaxPixels), loc=0.6, scale=0.15) + stats.norm.pdf(getRelativeMaskSizeToWaxSize(shapeMask, numberOfWaxPixels), loc=0.98, scale=0.01)
 
-def getSymmetryValuesForPairMaks(pairMasks, referenceImage):
+def getSymmetryValuesForPairMasks(pairMasks, referenceImage):
     return list(map(lambda mask: getSymmetryValueForMask(mask, referenceImage), pairMasks))
 
 def getSymmetryValueForMask(shapeMask, referenceImage):
     # Our approach is to first get the moments of the contour the mask describes.
     # With the contour's center of gravity and orientation we fit a line through it,
-    # drawing it black to separate the mask into two even shapes in which we can
-    # individually check how many pixels in the reference image are white in them.
-    # Finally, we compare the count and return <todo>
-    maskCopy = imutils.resize(shapeMask.copy(), width=700)
-    referenceCopy = imutils.resize(referenceImage.copy(), width=700)
+    # drawing it black to separate the mask into two even shapes. For one of those shapes
+    # (oneHalfMask) we iterate through every (white) pixel p to count how many white pixels n
+    # are in p's neighborhood in the referenceImage. We then count the mirrored pixel's p'
+    # count n' and check the difference between n and n'. Doing that, we do not compare "exact"
+    # symmetry by checking referenceImage(p) == referenceImage(p'), as this resulted in unreliable
+    # overall values for a shape due to the high count of black pixels in the referenceImage.
+    # We get the differences abs(n-n') 0 meaning they have the same count
+    # of white pixels in their neighborhood and are seen as totally symmetric.
+    # To get an overall score for a shape we calculate the L2-Norm of all the differences.
+
+    maskCopy = imutils.resize(shapeMask.copy(), width=500)
+    referenceCopy = imutils.resize(referenceImage.copy(), width=500)
 
     shapeHalvesMask, (startX, startY), (endX, endY) = splitShapeMaskInEvenHalves(maskCopy)
 
@@ -116,21 +123,27 @@ def getSymmetryValueForMask(shapeMask, referenceImage):
     cv.drawContours(oneHalfMask, shapeHalvesContours, 0, (255, 255, 255), -1)
 
     rows, cols = np.where(oneHalfMask == 255)
-    allSymmetryEqualityTuples = [pointEqualsMirrorPointInReferenceImage(x, y, startX, startY, endX, endY, referenceCopy) for x,y in zip(rows, cols)]
-    mirroredPointEqualsCount = len(np.where(allSymmetryEqualityTuples)[0])
-    print(mirroredPointEqualsCount / len(rows))
+    mirroredPointsDifferenceCounts = [getWhitePixelDifferenceToMirroredPoint(x, y, startX, startY, endX, endY, 2, referenceCopy) for x,y in zip(rows, cols)]
+    totalCount = np.linalg.norm(mirroredPointsDifferenceCounts)
+    return totalCount
 
-    cv.drawContours(referenceCopy, shapeHalvesContours, -1, (255, 255, 255), 4)
-    cv.imshow("symmetry", referenceCopy)
+def getWhitePixelDifferenceToMirroredPoint(pointX, pointY, startX, startY, endX, endY, kernelRadius, referenceImage):
+    ownWhitePixelCount = getNumberOfWhitePixelsInNeighborhood(pointX, pointY, kernelRadius, referenceImage)
 
-    cv.waitKey(0)
-    return mirroredPointEqualsCount / len(rows)
-
-def pointEqualsMirrorPointInReferenceImage(pointX, pointY, startX, startY, endX, endY, referenceImage):
     mirroredPointAlongLine = getMirroredPointAlong(pointX, pointY, startX, startY, endX, endY)
-    pointValueInReferenceImage = referenceImage[pointX, pointY]
-    mirroredPointValueInReferenceImage = referenceImage[min(mirroredPointAlongLine[0], referenceImage.shape[0]-1), min(mirroredPointAlongLine[1], referenceImage.shape[1]-1)]
-    return pointValueInReferenceImage == mirroredPointValueInReferenceImage
+    mirroredWhitePixelCount =  getNumberOfWhitePixelsInNeighborhood(mirroredPointAlongLine[0], mirroredPointAlongLine[1], kernelRadius, referenceImage)
+
+    whitePixelDifferenceCount = abs(ownWhitePixelCount-mirroredWhitePixelCount)
+
+    return whitePixelDifferenceCount
+
+def getNumberOfWhitePixelsInNeighborhood(pointX, pointY, kernelRadius, referenceImage):
+    (imageHeight, imageWidth) = referenceImage.shape[:2]
+
+    whitePixelsCount = cv.countNonZero(referenceImage[max(pointX-kernelRadius, 0):min(pointX+kernelRadius+1, imageWidth),
+                   max(pointY-kernelRadius,0):min(pointY+kernelRadius+1, imageHeight)].flatten())
+
+    return whitePixelsCount
 
 def getMirroredPointAlong(pointX, pointY, startX, startY, endX, endY):
     # Set line to equation Ax + By + C = 0
@@ -159,7 +172,6 @@ def splitShapeMaskInEvenHalves(shapeMask):
     moments = cv.moments(shapeContours[0])
 
     center = (int(moments["m10"] / moments["m00"]), int(moments["m01"] / moments["m00"]))
-    #theta = 27
     theta = 0.5 * np.arctan2(2*moments["mu11"], moments["mu20"] - moments["mu02"])
 
     lineLength = max(maskCopy.shape)
@@ -167,11 +179,6 @@ def splitShapeMaskInEvenHalves(shapeMask):
     startY = int(-lineLength * np.sin(theta) + center[1])
     endX = int(lineLength * np.cos(theta) + center[0])
     endY = int(lineLength * np.sin(theta) + center[1])
-
-    #startX = int( center[0])
-    #startY = int(-lineLength * np.sin(theta) + center[1])
-    #endX = int( center[0])
-    #endY = int(lineLength * np.sin(theta) + center[1])
 
     cv.line(maskCopy, (startX, startY), (endX, endY), (0, 0, 0), 5)
 

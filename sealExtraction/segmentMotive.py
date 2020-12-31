@@ -51,9 +51,15 @@ def segmentMotive(waxSegmentedImage):
     maskContours = cv.findContours(mask, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
     maskContours = imutils.grab_contours(maskContours)
 
-    drawGivenContoursOn(maskContours, waxSegmentedImage)
+    contourMask = np.zeros(waxSegmentedImage.shape[:2],np.uint8)
+    cv.drawContours(contourMask, maskContours, -1, (255), -1)
 
+    waxSegmentedImage = cv.bitwise_and(waxSegmentedImage,waxSegmentedImage,mask = contourMask)
+    waxSegmentedImage = cropImageToContourAABB(waxSegmentedImage, maskContours[0])
+
+    print("Done segmenting image")
     return waxSegmentedImage
+
 
 def cropImageToContoursAABB(image, contours):
     points = np.concatenate(
@@ -85,8 +91,6 @@ def getMostLikelyMaskFor(allContours, contoursPairs, referenceImage, numberOfWax
     pairMasks = list(filter(lambda masks: len(masks) > 0, pairMasks))
 
     scoreSums = getCriteriaWeightedScores(pairMasks, referenceImage, numberOfWaxPixels)
-
-    drawPairMasksAndScoresOn(pairMasks, scoreSums, original)
 
     return getMaskWithHighestScore(scoreSums, pairMasks)
 
@@ -131,9 +135,11 @@ def shouldBeFilteredOut(mask, referenceImage, numberOfWaxPixels):
         return True
     if getRelativeMaskSizeToWaxSize(mask, numberOfWaxPixels) <= 0.15:
         return True
+    if getRelativeMaskSizeToWaxSize(mask, numberOfWaxPixels) >= 1.2:
+        return True
     if boundingBoxIsTouchingImageBorder(mask, referenceImage):
         return True
-    if getAngleDifferenceToEvenRotation(mask) >= 25:
+    if getAngleDifferenceToEvenRotation(mask) >= 30:
         return True
     return False
 

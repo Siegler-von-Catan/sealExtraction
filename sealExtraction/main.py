@@ -25,17 +25,6 @@ from sealExtraction import segmentSeal
 
 inputPath = None
 
-def handleKeyEvents():
-    """
-    Keeps a key listener running and reacts to down presses of keys.
-    See program documentation for the key mapping.
-    """
-    while True:
-        ch = cv.waitKey()
-        if ch == 27:
-            break
-
-
 def initializArgumentParser():
     """
     Initialize documentation for the command line arguments and return the arguments extracted
@@ -65,7 +54,7 @@ def getJPGGlob():
     return jpgGlob
 
 def saveImageAsFile(image, imageName, directoryToSave):
-    outputPath = outputDirectory + imageName
+    outputPath = directoryToSave + imageName
     cv.imwrite(outputPath, image)
 
 
@@ -86,7 +75,6 @@ def main():
         result = segmentSeal(image)
         saveImageAsFile(result, file.split("/")[-1], outputDirectory)
 
-    #handleKeyEvents()
     cv.destroyAllWindows()
 
 if __name__ == '__main__':
