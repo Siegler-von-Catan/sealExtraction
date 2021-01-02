@@ -30,50 +30,26 @@ def initializArgumentParser():
     Initialize documentation for the command line arguments and return the arguments extracted
     """
     ap = argparse.ArgumentParser()
-    ap.add_argument("-d", "--directory", required=True,
-	help="path to directory containing jpg pictures to process")
+    ap.add_argument("-o", "--output", required=True, help='output file')
+    ap.add_argument('input', metavar="INPUT", help='input file')
     return ap
-
-def getJPGGlob():
-    """
-    Return the glob (https://docs.python.org/3/library/glob.html) of all containing jpg files
-    in the given images directory. Closes program if no glob could be created by eg. not
-    finding the given path
-    """
-    global inputPath
-    ap = initializArgumentParser()
-    args = vars(ap.parse_args())
-    inputPath = args["directory"]
-    imageRegex = inputPath + "/*.jpg"
-    jpgGlob = glob(imageRegex)
-
-    if jpgGlob is None:
-        print("Failed to load images:", inputPath)
-        sys.exit(1)
-
-    return jpgGlob
-
-def saveImageAsFile(image, imageName, directoryToSave):
-    outputPath = directoryToSave + imageName
-    cv.imwrite(outputPath, image)
 
 
 def main():
     """
-    Read in all jpg images which lie in IMAGES_DIRECTORY_PATH,
+    Read in jpg image,
     Extract the white background,
     Normalize image size,
     Extract Motive,
     Save each result as folder in given path
     """
-    jpgGlob = getJPGGlob()
 
-    outputDirectory = inputPath + "edgeResult/"
-    os.makedirs(outputDirectory, exist_ok=True)
-    for file in jpgGlob:
-        image = cv.imread(file)
-        result = segmentSeal(image)
-        saveImageAsFile(result, file.split("/")[-1], outputDirectory)
+    ap = initializArgumentParser()
+    args = vars(ap.parse_args())
+
+    image = cv.imread(args['input'])
+    result = segmentSeal(image)
+    cv.imwrite(args['output'], result)
 
     cv.destroyAllWindows()
 
