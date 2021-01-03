@@ -7,7 +7,7 @@ We do not care about the writing, background or the edges of the pressed down wa
 of the used stamp.
 
 Usage:
-  sealExtraction.py [-h] --d IMAGES_DIRECTORY_PATH
+  sealExtraction.py [-h] --o OUTPUT INPUT
 
 Keys:
   ESC   - exit
@@ -39,7 +39,6 @@ def main():
     """
     Read in jpg image,
     Extract the white background,
-    Normalize image size,
     Extract Motive,
     Save each result as folder in given path
     """

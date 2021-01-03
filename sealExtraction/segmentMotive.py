@@ -54,12 +54,12 @@ def segmentMotive(waxSegmentedImage):
     contourMask = np.zeros(waxSegmentedImage.shape[:2],np.uint8)
     cv.drawContours(contourMask, maskContours, -1, (255), -1)
 
+    waxSegmentedImage = cv.cvtColor(waxSegmentedImage, cv.COLOR_BGR2BGRA)
     waxSegmentedImage = cv.bitwise_and(waxSegmentedImage,waxSegmentedImage,mask = contourMask)
     waxSegmentedImage = cropImageToContourAABB(waxSegmentedImage, maskContours[0])
 
     print("Done segmenting image")
     return waxSegmentedImage
-
 
 def cropImageToContoursAABB(image, contours):
     points = np.concatenate(
