@@ -5,7 +5,7 @@ import numpy as np
 def getRelativeMaskSizeToWaxSize(mask, numberOfWaxPixels):
     maskRows = np.where(mask == 255)[0]
 
-    return len(maskRows) / numberOfWaxPixels
+    return np.size(maskRows) / numberOfWaxPixels
 
 def normalizeValues(nestedNpArray):
     highestValue = max({max(shapeValues) for shapeValues in nestedNpArray})
