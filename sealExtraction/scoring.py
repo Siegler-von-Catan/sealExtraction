@@ -4,6 +4,7 @@ import imutils
 import numpy as np
 from ensure import ensure
 from scipy import stats
+import scipy.ndimage as ndi
 
 from utils import getRelativeMaskSizeToWaxSize, normalizeValues
 
@@ -98,6 +99,98 @@ def getSymmetryValuesForPairMasks(pairMasks, referenceImage):
     return list(map(lambda mask: getSymmetryValueForMask(mask, referenceImage), pairMasks))
 
 def getSymmetryValueForMask(shapeMask, referenceImage):
+    maskCopy = imutils.resize(shapeMask.copy(),           height=500)
+    referenceCopy = imutils.resize(referenceImage.copy(), height=500)
+
+    (center, theta) = shapeCenterAngle(maskCopy)
+
+    #cv.rectangle(maskCopy, cv.boundingRect(maskCopy), (255, 0, 0))
+
+    rotmask = ndi.rotate(maskCopy, np.rad2deg(theta), reshape=False)
+    rotref = ndi.rotate(referenceCopy, np.rad2deg(theta), reshape=False)
+
+    brect = cv.boundingRect(rotmask)
+    (y, x, w, h) = brect
+    print(f'brect={brect}')
+    cv.rectangle(rotmask, (y, x), (y+h, x+w), (150, 0, 0))
+
+    w_even = w - (w % 2)
+    w_half = w_even // 2
+    h_even = h - (h % 2)
+    h_half = h_even // 2
+
+    if y + h_even >= 500:
+        return 0
+
+    cv.rectangle(rotmask, (x, y,       ), (x+w_even, y+h_half), (100, 0, 0))
+    cv.rectangle(rotmask, (x, y+h_half ), (x+w_even, y+h_even), (100, 0, 0))
+    upperMask = rotmask.copy() [          y:(y+h_half), x:(x+w_even) ]
+    lowerMask = rotmask.copy() [ (y+h_half):(y+h_even), x:(x+w_even) ]
+    print('rotmask shape={}'.format(rotmask.shape))
+
+    print(rotref.shape)
+    upperRI = rotref.copy() [          y:(y+h_half), x:(x+w_even) ]
+    lowerRI = rotref.copy() [ (y+h_half):(y+h_even), x:(x+w_even) ]
+    lowerRI = np.flipud(lowerRI)
+    #lowerRI = np.fliplr(lowerRI)
+
+    # upperRI = ndi.maximum_filter(upperRI, size=3)
+    # lowerRI = ndi.maximum_filter(lowerRI, size=3)
+
+    upperRI = ndi.gaussian_filter(upperRI, sigma=3)
+    lowerRI = ndi.gaussian_filter(lowerRI, sigma=3)
+
+    upperRIM = np.ma.masked_where(upperMask == 0, upperRI)
+    lowerRIM = np.ma.masked_where(lowerMask == 0, lowerRI)
+
+    #diff = np.ma.masked_values( abs(upperRI - lowerRI) / 255.0 , value=0)
+    diff = np.abs(upperRIM - lowerRIM)
+    diff_normalized = diff / 255.0
+
+    calculate_pc = False
+    if calculate_pc:
+        kernelSize = (5, 5)
+        upperPC = ndi.generic_filter(upperRIM,
+            np.count_nonzero,
+            size=kernelSize,
+            mode='constant'
+            )
+        lowerPC = ndi.generic_filter(lowerRIM,
+            np.count_nonzero,
+            size=kernelSize,
+            mode='constant'
+            )
+
+        diff_pc = np.sum(np.ma.masked_where(upperMask == 0, np.abs(upperPC - lowerPC)))
+        print(f'diff_pc={diff_pc}')
+
+
+    diff_flat = diff_normalized.flatten()
+    print(diff_flat)
+    #diff_norm = np.linalg.norm(diff_flat, ord='fro')
+    diff_norm = np.linalg.norm(diff_flat, ord=1)
+    diff_sum = np.sum(diff_flat)
+    diff_norm_sum = diff_sum / upperRIM.count()
+    diff_median = np.ma.median(diff_flat)
+    print(f'diff_norm={diff_norm} diff_sum={diff_sum} diff_norm_sum={diff_norm_sum} diff_median={diff_median}')
+
+    if False:
+        cv.imshow('mask', maskCopy)
+        cv.imshow('rotmask', rotmask)
+        cv.imshow('uppermask', upperMask)
+        cv.imshow('lowermask', lowerMask)
+        cv.imshow('upperrim', upperRIM)
+        cv.imshow('lowerrim', lowerRIM)
+        cv.imshow('upperPC', 10* upperPC)
+        cv.imshow('lowerPC', 10* lowerPC)
+        cv.imshow('diff', diff)
+        while cv.waitKey(0) != 27:
+            print('...')
+        cv.destroyAllWindows()
+
+    return 1.0 - diff_norm_sum
+
+def getSymmetryValueForMaskAlt(shapeMask, referenceImage):
     # Our approach is to first get the moments of the contour the mask describes.
     # With the contour's center of gravity and orientation we fit a line through it,
     # drawing it black to separate the mask into two even shapes. For one of those shapes
@@ -162,6 +255,19 @@ def getMirroredPointAlong(pointX, pointY, startX, startY, endX, endY):
     PMY = pointY - 2 * BN * D
 
     return (int(PMX), int(PMY))
+
+def shapeCenterAngle(shapeMask):
+    maskCopy = shapeMask.copy()
+    shapeContours = cv.findContours(maskCopy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+    shapeContours = imutils.grab_contours(shapeContours)
+    ensure(len(shapeContours) == 1).equals(True)
+
+    moments = cv.moments(shapeContours[0])
+
+    center = (int(moments["m10"] / moments["m00"]), int(moments["m01"] / moments["m00"]))
+    theta = 0.5 * np.arctan2(2*moments["mu11"], moments["mu20"] - moments["mu02"])
+
+    return (center, theta)
 
 def splitShapeMaskInEvenHalves(shapeMask):
     maskCopy = shapeMask.copy()
