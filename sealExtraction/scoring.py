@@ -111,7 +111,7 @@ def getSymmetryValueForMask(shapeMask, referenceImage):
 
     brect = cv.boundingRect(rotmask)
     (y, x, w, h) = brect
-    print(f'brect={brect}')
+    # print(f'brect={brect}')
     cv.rectangle(rotmask, (y, x), (y+h, x+w), (150, 0, 0))
 
     w_even = w - (w % 2)
@@ -126,9 +126,9 @@ def getSymmetryValueForMask(shapeMask, referenceImage):
     cv.rectangle(rotmask, (x, y+h_half ), (x+w_even, y+h_even), (100, 0, 0))
     upperMask = rotmask.copy() [          y:(y+h_half), x:(x+w_even) ]
     lowerMask = rotmask.copy() [ (y+h_half):(y+h_even), x:(x+w_even) ]
-    print('rotmask shape={}'.format(rotmask.shape))
+    # print('rotmask shape={}'.format(rotmask.shape))
 
-    print(rotref.shape)
+    # print(rotref.shape)
     upperRI = rotref.copy() [          y:(y+h_half), x:(x+w_even) ]
     lowerRI = rotref.copy() [ (y+h_half):(y+h_even), x:(x+w_even) ]
     lowerRI = np.flipud(lowerRI)
@@ -166,13 +166,13 @@ def getSymmetryValueForMask(shapeMask, referenceImage):
 
 
     diff_flat = diff_normalized.flatten()
-    print(diff_flat)
+    # print(diff_flat)
     #diff_norm = np.linalg.norm(diff_flat, ord='fro')
     diff_norm = np.linalg.norm(diff_flat, ord=1)
     diff_sum = np.sum(diff_flat)
     diff_norm_sum = diff_sum / upperRIM.count()
     diff_median = np.ma.median(diff_flat)
-    print(f'diff_norm={diff_norm} diff_sum={diff_sum} diff_norm_sum={diff_norm_sum} diff_median={diff_median}')
+    # print(f'diff_norm={diff_norm} diff_sum={diff_sum} diff_norm_sum={diff_norm_sum} diff_median={diff_median}')
 
     if False:
         cv.imshow('mask', maskCopy)
