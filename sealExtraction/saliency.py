@@ -9,8 +9,7 @@ def getSaliencyMask(waxSegmentedImage):
 
     threshMap =  getSaliencyThreshMap(waxSegmentedImageCopy)
     threshMap = postProcessThreshMask(threshMap)
-
-    threshMap = cv.resize(threshMap,  (waxSegmentedImage.shape[1], waxSegmentedImage.shape[0]))
+    threshMap = cv.resize(threshMap,(waxSegmentedImage.shape[1], waxSegmentedImage.shape[0]))
 
     return threshMap
 
@@ -41,7 +40,6 @@ def postProcessThreshMask(threshMap):
     threshMap = deleteShadow(threshMap, contours[1])
 
     deleteUninterestingContours(contours, threshMap, splittingIndex)
-
     return threshMap
 
 def deleteUninterestingContours(allContours, maskToDrawOn, splittingIndex):
@@ -60,14 +58,15 @@ def deleteShadow(saliencyTreshMap, innerShadowContour):
     """
     shadowMask = np.zeros(saliencyTreshMap.shape[:2],np.uint8)
     cv.fillPoly(shadowMask, pts =[innerShadowContour], color=(255,255,255))
-    shadowMask = cv.bitwise_and(saliencyTreshMap,saliencyTreshMap,mask = shadowMask)
-
+    shadowMask = cv.bitwise_and(saliencyTreshMap, saliencyTreshMap, mask = shadowMask)
     # In some cases, there is no shadow (if the mask is also touching image borders)
     # Check and return the orignal just in case
     contours = cv.findContours(shadowMask, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
     contours = imutils.grab_contours(contours)
 
-    if len(contours) == 1:
+    # also, with so few contours we might have grapped the wrong contour and could not do anything
+    # with the shadowMask. so take the lesser evil and accept the shadow
+    if len(contours) <= 20:
         return saliencyTreshMap
     else:
         return shadowMask
