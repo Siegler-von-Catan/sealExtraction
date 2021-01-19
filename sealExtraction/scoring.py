@@ -21,6 +21,7 @@ import imutils
 import numpy as np
 from ensure import ensure
 from scipy import stats
+import scipy.ndimage as ndi
 
 from utils import getRelativeMaskSizeToWaxSize, normalizeValues
 
@@ -49,7 +50,7 @@ def getSingleWeightedScores(densityScoresForPair, distanceScoresForPair, angleSc
     return [ getWeightedScore(density, distance, angle, distribution, symmetry) for density, distance, angle, distribution, symmetry in zip(densityScoresForPair, distanceScoresForPair, angleScoresForPair, distributionScoresForPair, symmetryForPair)]
 
 def getWeightedScore(densityScore, distanceScore, angleScore, distributionScore, symmetry):
-    return densityScore + 3*distanceScore + 2*angleScore + 2.5*distributionScore + 2*symmetry
+    return densityScore + 3*distanceScore + 2*angleScore + 2.5*distributionScore + 1.5*symmetry
 
 def getDensitiesForPairMasks(pairMasks, referenceImage):
     return list(map(lambda mask: getDensityOfMaskedArea(mask, referenceImage), pairMasks))
@@ -115,6 +116,56 @@ def getSymmetryValuesForPairMasks(pairMasks, referenceImage):
     return list(map(lambda mask: getSymmetryValueForMask(mask, referenceImage), pairMasks))
 
 def getSymmetryValueForMask(shapeMask, referenceImage):
+    maskCopy = imutils.resize(shapeMask.copy(),           height=500)
+    referenceCopy = imutils.resize(referenceImage.copy(), height=500)
+
+    (center, theta) = shapeCenterAngle(maskCopy)
+
+    rotmask = ndi.rotate(maskCopy, np.rad2deg(theta), reshape=False)
+    rotref = ndi.rotate(referenceCopy, np.rad2deg(theta), reshape=False)
+
+    brect = cv.boundingRect(rotmask)
+    (y, x, w, h) = brect
+    cv.rectangle(rotmask, (y, x), (y+h, x+w), (150, 0, 0))
+
+    w_even = w - (w % 2)
+    w_half = w_even // 2
+    h_even = h - (h % 2)
+    h_half = h_even // 2
+
+    if y + h_even >= 500:
+        return 0
+
+    cv.rectangle(rotmask, (x, y,       ), (x+w_even, y+h_half), (100, 0, 0))
+    cv.rectangle(rotmask, (x, y+h_half ), (x+w_even, y+h_even), (100, 0, 0))
+    upperMask = rotmask.copy() [          y:(y+h_half), x:(x+w_even) ]
+    lowerMask = rotmask.copy() [ (y+h_half):(y+h_even), x:(x+w_even) ]
+    upperRI = rotref.copy() [          y:(y+h_half), x:(x+w_even) ]
+    lowerRI = rotref.copy() [ (y+h_half):(y+h_even), x:(x+w_even) ]
+    lowerRI = np.flipud(lowerRI)
+
+    upperRI = ndi.gaussian_filter(upperRI, sigma=3)
+    lowerRI = ndi.gaussian_filter(lowerRI, sigma=3)
+
+    upperRIM = np.ma.masked_where(upperMask == 0, upperRI)
+    lowerRIM = np.ma.masked_where(lowerMask == 0, lowerRI)
+
+    kernelSize = (5, 5)
+    upperPC = ndi.generic_filter(upperRIM,
+        np.count_nonzero,
+        size=kernelSize,
+        mode='constant'
+        )
+    lowerPC = ndi.generic_filter(lowerRIM,
+        np.count_nonzero,
+        size=kernelSize,
+        mode='constant'
+        )
+
+    return np.linalg.norm(np.ma.masked_where(upperMask == 0, np.abs(upperPC - lowerPC)))
+
+# Legacy code, very slow
+def getSymmetryValueForMaskAlt(shapeMask, referenceImage):
     # Our approach is to first get the moments of the contour the mask describes.
     # With the contour's center of gravity and orientation we fit a line through it,
     # drawing it black to separate the mask into two even shapes. For one of those shapes
@@ -146,10 +197,8 @@ def getSymmetryValueForMask(shapeMask, referenceImage):
 
 def getWhitePixelDifferenceToMirroredPoint(pointX, pointY, startX, startY, endX, endY, kernelRadius, referenceImage):
     ownWhitePixelCount = getNumberOfWhitePixelsInNeighborhood(pointX, pointY, kernelRadius, referenceImage)
-
     mirroredPointAlongLine = getMirroredPointAlong(pointX, pointY, startX, startY, endX, endY)
     mirroredWhitePixelCount =  getNumberOfWhitePixelsInNeighborhood(mirroredPointAlongLine[0], mirroredPointAlongLine[1], kernelRadius, referenceImage)
-
     whitePixelDifferenceCount = abs(ownWhitePixelCount-mirroredWhitePixelCount)
 
     return whitePixelDifferenceCount
@@ -179,6 +228,19 @@ def getMirroredPointAlong(pointX, pointY, startX, startY, endX, endY):
     PMY = pointY - 2 * BN * D
 
     return (int(PMX), int(PMY))
+
+def shapeCenterAngle(shapeMask):
+    maskCopy = shapeMask.copy()
+    shapeContours = cv.findContours(maskCopy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+    shapeContours = imutils.grab_contours(shapeContours)
+    ensure(len(shapeContours) == 1).equals(True)
+
+    moments = cv.moments(shapeContours[0])
+
+    center = (int(moments["m10"] / moments["m00"]), int(moments["m01"] / moments["m00"]))
+    theta = 0.5 * np.arctan2(2*moments["mu11"], moments["mu20"] - moments["mu02"])
+
+    return (center, theta)
 
 def splitShapeMaskInEvenHalves(shapeMask):
     maskCopy = shapeMask.copy()
