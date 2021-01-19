@@ -5,6 +5,7 @@ Extracting the motive out of a wax stamp seal. Creates shapes out of contours an
   - how even their rotations are 
   - symmetry of underlying thresholded image
   - density (meaning relation between pixels of the underlying thresholded image to full shape size)
+  
 and interprets the shape with the highest score as the motive.
 
 Part of the Coding Da Vinci Niedersachsen 2020 Hackathon, we scan images of seals and produce 3D object out of them.
