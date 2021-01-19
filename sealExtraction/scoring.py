@@ -50,7 +50,7 @@ def getSingleWeightedScores(densityScoresForPair, distanceScoresForPair, angleSc
     return [ getWeightedScore(density, distance, angle, distribution, symmetry) for density, distance, angle, distribution, symmetry in zip(densityScoresForPair, distanceScoresForPair, angleScoresForPair, distributionScoresForPair, symmetryForPair)]
 
 def getWeightedScore(densityScore, distanceScore, angleScore, distributionScore, symmetry):
-    return densityScore + 3*distanceScore + 2*angleScore + 2.5*distributionScore + 2*symmetry
+    return densityScore + 3*distanceScore + 2*angleScore + 2.5*distributionScore + 1.5*symmetry
 
 def getDensitiesForPairMasks(pairMasks, referenceImage):
     return list(map(lambda mask: getDensityOfMaskedArea(mask, referenceImage), pairMasks))
@@ -121,14 +121,11 @@ def getSymmetryValueForMask(shapeMask, referenceImage):
 
     (center, theta) = shapeCenterAngle(maskCopy)
 
-    #cv.rectangle(maskCopy, cv.boundingRect(maskCopy), (255, 0, 0))
-
     rotmask = ndi.rotate(maskCopy, np.rad2deg(theta), reshape=False)
     rotref = ndi.rotate(referenceCopy, np.rad2deg(theta), reshape=False)
 
     brect = cv.boundingRect(rotmask)
     (y, x, w, h) = brect
-    print(f'brect={brect}')
     cv.rectangle(rotmask, (y, x), (y+h, x+w), (150, 0, 0))
 
     w_even = w - (w % 2)
@@ -143,16 +140,9 @@ def getSymmetryValueForMask(shapeMask, referenceImage):
     cv.rectangle(rotmask, (x, y+h_half ), (x+w_even, y+h_even), (100, 0, 0))
     upperMask = rotmask.copy() [          y:(y+h_half), x:(x+w_even) ]
     lowerMask = rotmask.copy() [ (y+h_half):(y+h_even), x:(x+w_even) ]
-    print('rotmask shape={}'.format(rotmask.shape))
-
-    print(rotref.shape)
     upperRI = rotref.copy() [          y:(y+h_half), x:(x+w_even) ]
     lowerRI = rotref.copy() [ (y+h_half):(y+h_even), x:(x+w_even) ]
     lowerRI = np.flipud(lowerRI)
-    #lowerRI = np.fliplr(lowerRI)
-
-    # upperRI = ndi.maximum_filter(upperRI, size=3)
-    # lowerRI = ndi.maximum_filter(lowerRI, size=3)
 
     upperRI = ndi.gaussian_filter(upperRI, sigma=3)
     lowerRI = ndi.gaussian_filter(lowerRI, sigma=3)
@@ -160,53 +150,21 @@ def getSymmetryValueForMask(shapeMask, referenceImage):
     upperRIM = np.ma.masked_where(upperMask == 0, upperRI)
     lowerRIM = np.ma.masked_where(lowerMask == 0, lowerRI)
 
-    #diff = np.ma.masked_values( abs(upperRI - lowerRI) / 255.0 , value=0)
-    diff = np.abs(upperRIM - lowerRIM)
-    diff_normalized = diff / 255.0
+    kernelSize = (5, 5)
+    upperPC = ndi.generic_filter(upperRIM,
+        np.count_nonzero,
+        size=kernelSize,
+        mode='constant'
+        )
+    lowerPC = ndi.generic_filter(lowerRIM,
+        np.count_nonzero,
+        size=kernelSize,
+        mode='constant'
+        )
 
-    calculate_pc = False
-    if calculate_pc:
-        kernelSize = (5, 5)
-        upperPC = ndi.generic_filter(upperRIM,
-            np.count_nonzero,
-            size=kernelSize,
-            mode='constant'
-            )
-        lowerPC = ndi.generic_filter(lowerRIM,
-            np.count_nonzero,
-            size=kernelSize,
-            mode='constant'
-            )
+    return np.linalg.norm(np.ma.masked_where(upperMask == 0, np.abs(upperPC - lowerPC)))
 
-        diff_pc = np.sum(np.ma.masked_where(upperMask == 0, np.abs(upperPC - lowerPC)))
-        print(f'diff_pc={diff_pc}')
-
-
-    diff_flat = diff_normalized.flatten()
-    print(diff_flat)
-    #diff_norm = np.linalg.norm(diff_flat, ord='fro')
-    diff_norm = np.linalg.norm(diff_flat, ord=1)
-    diff_sum = np.sum(diff_flat)
-    diff_norm_sum = diff_sum / upperRIM.count()
-    diff_median = np.ma.median(diff_flat)
-    print(f'diff_norm={diff_norm} diff_sum={diff_sum} diff_norm_sum={diff_norm_sum} diff_median={diff_median}')
-
-    if False:
-        cv.imshow('mask', maskCopy)
-        cv.imshow('rotmask', rotmask)
-        cv.imshow('uppermask', upperMask)
-        cv.imshow('lowermask', lowerMask)
-        cv.imshow('upperrim', upperRIM)
-        cv.imshow('lowerrim', lowerRIM)
-        cv.imshow('upperPC', 10* upperPC)
-        cv.imshow('lowerPC', 10* lowerPC)
-        cv.imshow('diff', diff)
-        while cv.waitKey(0) != 27:
-            print('...')
-        cv.destroyAllWindows()
-
-    return 1.0 - diff_norm_sum
-
+# Legacy code, very slow
 def getSymmetryValueForMaskAlt(shapeMask, referenceImage):
     # Our approach is to first get the moments of the contour the mask describes.
     # With the contour's center of gravity and orientation we fit a line through it,
@@ -239,10 +197,8 @@ def getSymmetryValueForMaskAlt(shapeMask, referenceImage):
 
 def getWhitePixelDifferenceToMirroredPoint(pointX, pointY, startX, startY, endX, endY, kernelRadius, referenceImage):
     ownWhitePixelCount = getNumberOfWhitePixelsInNeighborhood(pointX, pointY, kernelRadius, referenceImage)
-
     mirroredPointAlongLine = getMirroredPointAlong(pointX, pointY, startX, startY, endX, endY)
     mirroredWhitePixelCount =  getNumberOfWhitePixelsInNeighborhood(mirroredPointAlongLine[0], mirroredPointAlongLine[1], kernelRadius, referenceImage)
-
     whitePixelDifferenceCount = abs(ownWhitePixelCount-mirroredWhitePixelCount)
 
     return whitePixelDifferenceCount
