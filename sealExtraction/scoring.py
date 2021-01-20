@@ -23,7 +23,7 @@ from ensure import ensure
 from scipy import stats
 import scipy.ndimage as ndi
 
-from utils import getRelativeMaskSizeToWaxSize, normalizeValues
+from sealExtraction.utils import getRelativeMaskSizeToWaxSize, normalizeValues
 
 def getCriteriaWeightedScores(pairMasks, referenceImage, numberOfWaxPixels):
     pairDensities = [getDensitiesForPairMasks(masks, referenceImage) for masks in pairMasks]

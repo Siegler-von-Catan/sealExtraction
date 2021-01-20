@@ -19,7 +19,7 @@ import cv2 as cv
 import imutils
 import numpy as np
 
-from utils import cropImageToContourAABB
+from sealExtraction.utils import cropImageToContourAABB
 
 def segmentWax(image):
     """

@@ -38,8 +38,8 @@ import os
 
 import cv2 as cv
 
-from segmentMotive import segmentMotive
-from segmentWax import segmentWax
+from sealExtraction.segmentMotive import segmentMotive
+from sealExtraction.segmentWax import segmentWax
 
 inputPath = None
 

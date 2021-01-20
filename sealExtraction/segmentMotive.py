@@ -20,10 +20,10 @@ import imutils
 import numpy as np
 from ensure import ensure
 
-from saliency import getSaliencyMask
-from scoring import getCriteriaWeightedScores, getAngleDifferenceToEvenRotation
+from sealExtraction.saliency import getSaliencyMask
+from sealExtraction.scoring import getCriteriaWeightedScores, getAngleDifferenceToEvenRotation
 
-from utils import getRelativeMaskSizeToWaxSize, drawGivenContoursOn, cropImageToContourAABB
+from sealExtraction.utils import getRelativeMaskSizeToWaxSize, drawGivenContoursOn, cropImageToContourAABB
 
 tenChooseTwoCache = [
     [1, 0],[2, 0],[2, 1],[3, 0],[3, 1],
