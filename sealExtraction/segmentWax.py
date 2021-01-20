@@ -49,19 +49,23 @@ def segmentWax(image):
 
 def performGrabCutOn(image):
     mask = image.copy()
-    mask_blur = cv.GaussianBlur(cv.cvtColor(mask, cv.COLOR_BGR2GRAY), (5,5), 0)
+    mask_blur = cv.GaussianBlur(cv.cvtColor(mask, cv.COLOR_BGR2GRAY), (5,5), 10.0)
     init_mask = cv.threshold(mask_blur, 0, 255, cv.THRESH_BINARY_INV|cv.THRESH_OTSU)[1]
-    se = np.ones((3,3), np.uint8)
+    se = np.ones((7,7), np.uint8)
     init_mask = cv.morphologyEx(init_mask, cv.MORPH_OPEN,  se, iterations = 10)
     init_mask = cv.morphologyEx(init_mask, cv.MORPH_CLOSE, se, iterations = 10)
     init_mask[init_mask > 0] = cv.GC_PR_FGD
     init_mask[init_mask == 0] = cv.GC_PR_BGD
+    init_mask[0:20,:] = cv.GC_BGD
+    init_mask[-20:,:] = cv.GC_BGD
+    init_mask[:,0:20] = cv.GC_BGD
+    init_mask[:,-20:] = cv.GC_BGD
     bgdModel = np.zeros((1,65),np.float64)
     fgdModel = np.zeros((1,65),np.float64)
     (mask, bgdModel, fgdModel) = cv.grabCut(image, init_mask, None, bgdModel,
         fgdModel, iterCount=5, mode=cv.GC_INIT_WITH_MASK)
 
-    return (mask == cv.GC_PR_FGD).astype("uint8") * 255
+    return (np.where((mask == cv.GC_BGD) | (mask == cv.GC_PR_BGD), 0, 1)).astype("uint8") * 255
 
 def cropImageToWaxAABB(image, waxMask):
     contours = cv.findContours(waxMask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
