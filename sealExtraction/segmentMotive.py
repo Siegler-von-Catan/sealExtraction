@@ -20,10 +20,10 @@ import imutils
 import numpy as np
 from ensure import ensure
 
-from saliency import getSaliencyMask
-from scoring import getCriteriaWeightedScores, getAngleDifferenceToEvenRotation
+from sealExtraction.saliency import getSaliencyMask
+from sealExtraction.scoring import getCriteriaWeightedScores, getAngleDifferenceToEvenRotation
 
-from utils import getRelativeMaskSizeToWaxSize, drawGivenContoursOn, cropImageToContourAABB
+from sealExtraction.utils import getRelativeMaskSizeToWaxSize, drawGivenContoursOn, cropImageToContourAABB
 
 tenChooseTwoCache = [
     [1, 0],[2, 0],[2, 1],[3, 0],[3, 1],
@@ -150,15 +150,28 @@ def getMasksForContourPair(contourA, contourB, referenceImage, numberOfWaxPixels
 def shouldBeFilteredOut(mask, referenceImage, numberOfWaxPixels):
     if isEmptyMask(mask):
         return True
+    if horizontalRelationToHeight(mask) >= 1.35:
+        return True
+    if horizontalRelationToHeight(mask) <= 0.4:
+        return True
     if getRelativeMaskSizeToWaxSize(mask, numberOfWaxPixels) <= 0.15:
         return True
     if getRelativeMaskSizeToWaxSize(mask, numberOfWaxPixels) >= 1.2:
         return True
     if boundingBoxIsTouchingImageBorder(mask, referenceImage):
         return True
-    if getAngleDifferenceToEvenRotation(mask) >= 30:
+    if getAngleDifferenceToEvenRotation(mask) >= 35:
         return True
     return False
+
+def horizontalRelationToHeight(shapeMask):
+    shapeContours = cv.findContours(shapeMask, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+    shapeContours = imutils.grab_contours(shapeContours)
+    ensure(len(shapeContours) == 1).equals(True)
+
+    x,y,w,h = cv.boundingRect(shapeContours[0])
+
+    return w/h
 
 def isEmptyMask(mask):
     return not np.any(mask > 0)

@@ -19,7 +19,7 @@ import cv2 as cv
 import imutils
 import numpy as np
 
-from utils import cropImageToContourAABB
+from sealExtraction.utils import cropImageToContourAABB
 
 def segmentWax(image):
     """
@@ -48,17 +48,24 @@ def segmentWax(image):
     return result
 
 def performGrabCutOn(image):
-    mask = np.zeros(image.shape[:2],np.uint8)
+    mask = image.copy()
+    mask_blur = cv.GaussianBlur(cv.cvtColor(mask, cv.COLOR_BGR2GRAY), (5,5), 10.0)
+    init_mask = cv.threshold(mask_blur, 0, 255, cv.THRESH_BINARY_INV|cv.THRESH_OTSU)[1]
+    se = np.ones((7,7), np.uint8)
+    init_mask = cv.morphologyEx(init_mask, cv.MORPH_OPEN,  se, iterations = 10)
+    init_mask = cv.morphologyEx(init_mask, cv.MORPH_CLOSE, se, iterations = 10)
+    init_mask[init_mask > 0] = cv.GC_PR_FGD
+    init_mask[init_mask == 0] = cv.GC_PR_BGD
+    init_mask[0:20,:] = cv.GC_BGD
+    init_mask[-20:,:] = cv.GC_BGD
+    init_mask[:,0:20] = cv.GC_BGD
+    init_mask[:,-20:] = cv.GC_BGD
     bgdModel = np.zeros((1,65),np.float64)
     fgdModel = np.zeros((1,65),np.float64)
-    height, width, _ = image.shape
-    rect = (10,10,width-1,height-50)
-    (mask, bgdModel, fgdModel) = cv.grabCut(image, mask, rect, bgdModel,
-	fgdModel, iterCount=5, mode=cv.GC_INIT_WITH_RECT)
+    (mask, bgdModel, fgdModel) = cv.grabCut(image, init_mask, None, bgdModel,
+        fgdModel, iterCount=5, mode=cv.GC_INIT_WITH_MASK)
 
-    foreGroundMask = (mask == cv.GC_PR_FGD).astype("uint8") * 255
-
-    return foreGroundMask
+    return (np.where((mask == cv.GC_BGD) | (mask == cv.GC_PR_BGD), 0, 1)).astype("uint8") * 255
 
 def cropImageToWaxAABB(image, waxMask):
     contours = cv.findContours(waxMask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)

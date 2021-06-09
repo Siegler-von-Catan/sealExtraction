@@ -23,7 +23,7 @@ from ensure import ensure
 from scipy import stats
 import scipy.ndimage as ndi
 
-from utils import getRelativeMaskSizeToWaxSize, normalizeValues
+from sealExtraction.utils import getRelativeMaskSizeToWaxSize, normalizeValues
 
 def getCriteriaWeightedScores(pairMasks, referenceImage, numberOfWaxPixels):
     pairDensities = [getDensitiesForPairMasks(masks, referenceImage) for masks in pairMasks]
@@ -50,7 +50,7 @@ def getSingleWeightedScores(densityScoresForPair, distanceScoresForPair, angleSc
     return [ getWeightedScore(density, distance, angle, distribution, symmetry) for density, distance, angle, distribution, symmetry in zip(densityScoresForPair, distanceScoresForPair, angleScoresForPair, distributionScoresForPair, symmetryForPair)]
 
 def getWeightedScore(densityScore, distanceScore, angleScore, distributionScore, symmetry):
-    return densityScore + 3*distanceScore + 2*angleScore + 2.5*distributionScore + 1.5*symmetry
+    return densityScore + 3.5*distanceScore + angleScore + 3.5*distributionScore + 2.7*symmetry
 
 def getDensitiesForPairMasks(pairMasks, referenceImage):
     return list(map(lambda mask: getDensityOfMaskedArea(mask, referenceImage), pairMasks))
@@ -88,10 +88,31 @@ def getShapeCenterToImageCenterDistance(shapeMask, referenceImage):
 def getAngleDifferencesForPairMasks(pairMasks):
     return list(map(lambda mask: getAngleDifferenceToEvenRotation(mask), pairMasks))
 
+def isCircle(shapeMask):
+    shapeContours = cv.findContours(shapeMask, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+    shapeContours = imutils.grab_contours(shapeContours)
+    ensure(len(shapeContours) == 1).equals(True)
+
+    (x,y),radius = cv.minEnclosingCircle(shapeContours[0])
+    radius = int(radius)
+
+    shapePixelCount = np.count_nonzero(shapeMask == 255)
+    enclosingPixelCount = 3.1416 * radius * radius
+
+    relation = shapePixelCount / enclosingPixelCount
+    return (relation >= 0.9 and relation <= 1.1)
+
+
 def getAngleDifferenceToEvenRotation(shapeMask):
+    # return 0 for circles
+    if (isCircle(shapeMask)): return 0
+
     shapeAngle = abs(getAngleFromShapeMask(shapeMask))
     # even rotations are 0, 90, 180, 270, 360. as the difference of 45 to the next one is equal to 135, module 90 here
     shapeAngle = shapeAngle % 90
+
+    # to avoid a strong reference of picking circles in the scoring, set mild rotated forms also to 0
+    if (shapeAngle <= 3 or shapeAngle >= 87): return 0
 
     if shapeAngle <= 45:
         return shapeAngle
@@ -110,7 +131,7 @@ def getDistributionValuesForPairMasks(pairMasks, numberOfWaxPixels):
     return list(map(lambda mask: getDistributionValueOfRelativeShapeSize(mask, numberOfWaxPixels), pairMasks))
 
 def getDistributionValueOfRelativeShapeSize(shapeMask, numberOfWaxPixels):
-    return stats.norm.pdf(getRelativeMaskSizeToWaxSize(shapeMask, numberOfWaxPixels), loc=0.6, scale=0.15) + stats.norm.pdf(getRelativeMaskSizeToWaxSize(shapeMask, numberOfWaxPixels), loc=0.98, scale=0.01)
+    return stats.norm.pdf(getRelativeMaskSizeToWaxSize(shapeMask, numberOfWaxPixels), loc=0.60, scale=0.15) + stats.norm.pdf(getRelativeMaskSizeToWaxSize(shapeMask, numberOfWaxPixels), loc=0.99, scale=0.01)
 
 def getSymmetryValuesForPairMasks(pairMasks, referenceImage):
     return list(map(lambda mask: getSymmetryValueForMask(mask, referenceImage), pairMasks))
