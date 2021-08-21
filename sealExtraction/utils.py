@@ -32,6 +32,8 @@ def normalizeValues(nestedNpArray):
     return normalizedValues
 
 def normalizeSimpleNumberArray(array, lowestValue, highestValue):
+    if lowestValue == highestValue:
+        return {0 for _ in array}
     return {(number-lowestValue) / (highestValue-lowestValue) for number in array}
 
 
