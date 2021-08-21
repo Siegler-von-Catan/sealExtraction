@@ -50,6 +50,7 @@ def initializArgumentParser():
     ap = argparse.ArgumentParser()
     ap.add_argument("-o", "--output", required=True, help='output file')
     ap.add_argument('input', metavar="INPUT", help='input file')
+    ap.add_argument('--coin', action='store_true', help="Activate coin mode")
     return ap
 
 
@@ -65,9 +66,15 @@ def main():
     args = vars(ap.parse_args())
 
     image = cv.imread(args['input'])
-    segmentedWax = segmentWax(image)
-    segmentedMotive = segmentMotive(segmentedWax)
-    result =  segmentedMotive
+
+    # For coins, we skip the segmentWax step, as it yields better results
+    if args['coin']:
+        segmentedMotive = segmentMotive(image)
+        result = segmentedMotive
+    else:
+        segmentedWax = segmentWax(image)
+        segmentedMotive = segmentMotive(image)
+        result = segmentedMotive
     cv.imwrite(args['output'], result)
 
     cv.destroyAllWindows()
