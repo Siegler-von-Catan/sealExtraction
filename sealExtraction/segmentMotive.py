@@ -107,6 +107,12 @@ def getMostLikelyMaskFor(allContours, contoursPairs, referenceImage, numberOfWax
     pairMasks = [getMasksForContourPair(allContours[pair[0]], allContours[pair[1]], referenceImage, numberOfWaxPixels) for pair in contoursPairs]
     pairMasks = list(filter(lambda masks: len(masks) > 0, pairMasks))
 
+    if all(len(element) == 0 for element in pairMasks):
+        print("Filtered out all masks, reiterating with disabled filter")
+        pairMasks = [getMasksForContourPair(allContours[pair[0]], allContours[pair[1]], referenceImage, numberOfWaxPixels, enable_filter=False) for pair in contoursPairs]
+        pairMasks = list(filter(lambda masks: len(masks) > 0, pairMasks))
+
+
     scoreSums = getCriteriaWeightedScores(pairMasks, referenceImage, numberOfWaxPixels)
 
     return getMaskWithHighestScore(scoreSums, pairMasks)
@@ -138,17 +144,23 @@ def getMaskWithHighestScore(scoreSums, pairMasks):
     belongingMask = maxValues.index(max(maxValues))
     return belongingMasks[belongingMask]
 
-def getMasksForContourPair(contourA, contourB, referenceImage, numberOfWaxPixels):
+def getMasksForContourPair(contourA, contourB, referenceImage, numberOfWaxPixels, enable_filter=True):
     """
     Create basic shapes to test how likely they contain the motive
     """
     masks = getShapeMasksForContourPair(contourA, contourB, referenceImage)
 
-    filteredMasks = list(filter(lambda mask: not shouldBeFilteredOut(mask, referenceImage, numberOfWaxPixels), masks))
-    return filteredMasks
+    if enable_filter:
+        return list(filter(lambda mask: not shouldBeFilteredOut(mask, referenceImage, numberOfWaxPixels), masks))
+    return list(filter(lambda mask: not mustBeFilteredOut(mask), masks))
+
+def mustBeFilteredOut(mask):
+    if isEmptyMask(mask):
+        return True
+    return False
 
 def shouldBeFilteredOut(mask, referenceImage, numberOfWaxPixels):
-    if isEmptyMask(mask):
+    if mustBeFilteredOut(mask):
         return True
     if horizontalRelationToHeight(mask) >= 1.35:
         return True

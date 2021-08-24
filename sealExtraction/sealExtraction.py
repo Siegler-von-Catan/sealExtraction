@@ -73,7 +73,7 @@ def main():
         result = segmentedMotive
     else:
         segmentedWax = segmentWax(image)
-        segmentedMotive = segmentMotive(image)
+        segmentedMotive = segmentMotive(segmentedWax)
         result = segmentedMotive
     cv.imwrite(args['output'], result)
 

@@ -2,6 +2,7 @@ import cv2 as cv
 from sealExtraction.segmentMotive import segmentMotive
 from sealExtraction.segmentWax import segmentWax
 
+
 def test_combined_segment_wax_and_segment_motive():
     image = cv.imread("test_images/test_01.jpg")
     tmp = segmentWax(image)
@@ -16,4 +17,4 @@ def test_combined_only_segment_motive():
     tmp = segmentMotive(image)
 
     # This is just a lazy check if the result looks somehow okay
-    assert tmp.shape == (2472, 1036, 4)
+    assert tmp.shape == (5019, 1435, 4)
